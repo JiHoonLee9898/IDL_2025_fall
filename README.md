@@ -1,19 +1,11 @@
 # Install
 ```bash
-git clone asdasd
 conda env create -f environment.yml
 conda activate IDL
 ```
 
 # Arguments
 Refer to the example in [`run_eval.sh`](/run_eval.sh). 
-
-`--data_path` <br>
-The absolute path to:
-```plaintext
-/coco2014 
-```
-
 `--data_path` is `[COCO_DIR]`.
 
 Note that `[COCO_DIR]` is expected to contain both images and annotation files within the annotations subfolder. In other words, `[COCO_DIR]` must follow the structure:
