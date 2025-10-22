@@ -6,6 +6,7 @@ conda activate IDL
 
 # Arguments
 Refer to the example in [`run_eval.sh`](/run_eval.sh). 
+`--model_path` is the absolute path of cloned https://huggingface.co/llava-hf/llava-1.5-7b-hf.
 `--data_path` is `[COCO_DIR]`.
 
 Note that `[COCO_DIR]` is expected to contain both images and annotation files within the annotations subfolder. In other words, `[COCO_DIR]` must follow the structure:

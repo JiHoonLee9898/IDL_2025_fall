@@ -57,8 +57,9 @@ MODEL_EVAL_CONFIG_PATH = {
 
 def parse_args():
     parser = argparse.ArgumentParser(description="POPE-Adv evaluation on LVLMs.")
-    parser.add_argument("--model", type=str, help="model")
-    parser.add_argument("--pope_type", type=str, help="model")
+    parser.add_argument("--model", type=str, help="model_type")
+    parser.add_argument("--model_path", type=str, help="model_path")
+    parser.add_argument("--pope_type", type=str, help="")
     # parser.add_argument("--cfg-path", required=True, help="path to configuration file.")
     parser.add_argument(
         "--gpu-id", type=int, default=0, help="specify the gpu to load the model."
@@ -207,7 +208,7 @@ def main():
 
 
     #fp 16
-    model_id = "/datasets2/llava-1.5-7b-hf"
+    model_id = args.model_path
     model = LlavaForConditionalGeneration.from_pretrained(
     model_id,
     torch_dtype=torch.float16,
@@ -220,7 +221,7 @@ def main():
 
 
     #fp 8
-    model_id = "/datasets2/llava-1.5-7b-hf"
+    model_id = args.model_path
     bnb_config = BitsAndBytesConfig(
         load_in_8bit=True,
         llm_int8_threshold=10.0,
