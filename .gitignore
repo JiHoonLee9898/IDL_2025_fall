@@ -1,0 +1,9 @@
+**/*.jpg
+**/*.png
+**/*.gif
+**/*.jpeg
+**/*.bmp
+**/*.svg
+generated_captions/*
+**/__pycache__/
+**/test_folder/*
