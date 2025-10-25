@@ -7,3 +7,5 @@
 generated_captions/*
 **/__pycache__/
 **/test_folder/*
+**/visualize/*
+paper_result/*

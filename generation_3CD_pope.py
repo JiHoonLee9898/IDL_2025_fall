@@ -114,6 +114,20 @@ def parse_args():
         default=100,
         help="Number of images to build POPE questions. Default is 500.",
     )
+
+    parser.add_argument(
+        "--alpha",
+        type=float,
+        default=0.25,
+        help="",
+    )
+    parser.add_argument(
+        "--beta",
+        type=float,
+        default=1,
+        help="",
+    )
+
     parser.add_argument(
         "--question_template",
         type=str,
@@ -188,7 +202,7 @@ def main():
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_id)
     args.cfg_path = MODEL_EVAL_CONFIG_PATH[args.model]
     cfg = Config(args)
-    decoding_strategy = 'greedy'
+    decoding_strategy = '3CD'
     seed = args.seed
     setup_seeds(seed)
     pope_type = args.pope_type
@@ -405,9 +419,9 @@ def main():
         input_ids = inputs["input_ids"].to(model.device)
         attention_mask = inputs["attention_mask"].to(model.device)
         pixel_values = inputs["pixel_values"].to(model.device)
-        # vlm_utils.input_pixels_to_img(pixel_values, 'original', 'img', '/home/work/jihoon_wombat_storage/eyetrack/vis')
+        vlm_utils.input_pixels_to_img(pixel_values, 'original', image_id, 'visualize/')
         generated = input_ids
-        max_new_tokens = args.tokens
+        max_new_tokens = max_new_tokens
 
         # 전부 같은 길이!
         greedy_token_names = []
@@ -416,7 +430,7 @@ def main():
         greedy_entropys = []
 
         with torch.inference_mode():
-            for token_step in range(max_new_tokens):
+            for token_step in range(1):
                 input_this_step = generated if token_step == 0 else next_token_id
                 outputs = model(
                     input_ids=input_this_step,
@@ -430,55 +444,161 @@ def main():
                 next_token_logits = outputs.logits[:, -1, :]
                 next_token_id = torch.argmax(next_token_logits, dim=-1, keepdim=True)
                 next_token_name = processor.tokenizer.convert_ids_to_tokens(next_token_id)[0]
-                # next_token_attentions = outputs.attentions
+                next_token_attentions = outputs.attentions
 
-                # next_token_blur_maps = []
-                # for attn in next_token_attentions:
-                #     h_map = attn.squeeze(0)[:, -1, 5:581]  # shape: [num_heads, 576]
-                #     h_map = h_map.view(-1, 24, 24)
-                #     next_token_blur_maps.append(h_map)
-                # next_token_blur_maps = torch.cat(next_token_blur_maps, dim=0)
+                if token_step == 0:
+                    next_token_blur_maps = []
+                    for i, attn in enumerate(next_token_attentions):
+                        h_map = attn.squeeze(0)[:, -1, 5:581].view(-1, 24, 24)
+                        next_token_blur_maps.append(h_map)
 
-                # maps_tensor = next_token_blur_maps
-                # vars = maps_tensor.view(maps_tensor.size(0), -1).var(dim=1, unbiased=False)
-                # sorted_indices = torch.argsort(vars, descending=True)
-                # sorted_maps = maps_tensor[sorted_indices]
-                # top_n = max(1, int(sorted_maps.size(0) * 0.01)) # !!!args.var
-                # maps_top = sorted_maps[:top_n]
-                # maps_top_filtered = vlm_utils.gaussian_filter_tensor_batch(maps_top, filter_type='gaussian', filter_size=13)
-                # summed_map = maps_top_filtered.sum(dim=(0, 1))
+                    next_token_blur_maps = torch.cat(next_token_blur_maps, dim=0)
 
-                # threshold = summed_map.mean()
-                # binary_mask = summed_map > threshold
-                # binary_map = binary_mask.int()
+                    maps_tensor = next_token_blur_maps
+                    vars = maps_tensor.view(maps_tensor.size(0), -1).var(dim=1, unbiased=False)
+                    sorted_indices = torch.argsort(vars, descending=True)
+                    sorted_maps = maps_tensor[sorted_indices]
+                    top_n = max(1, int(sorted_maps.size(0) * 0.1)) # !!!args.var
+                    maps_top = sorted_maps[:top_n]
+                    maps_top_filtered = vlm_utils.gaussian_filter_tensor_batch(maps_top, filter_type='gaussian', filter_size=25)
+                    summed_map = maps_top_filtered.sum(dim=(0, 1))
 
-                # margin_indices = torch.nonzero(~binary_mask, as_tuple=False)
-                # margin_values = summed_map[margin_indices[:, 0], margin_indices[:, 1]]
-                # margin_pos_list = [(int(y.item()), int(x.item()), float(v.item())) for (y, x), v in zip(margin_indices, margin_values)]
-                
-                # highlighted_indices = torch.nonzero(binary_mask, as_tuple=False)
-                # highlighted_values = summed_map[highlighted_indices[:, 0], highlighted_indices[:, 1]]
-                # highlighted_pos_list = [(int(y.item()), int(x.item()), float(v.item())) for (y, x), v in zip(highlighted_indices, highlighted_values)]
-                
-                # highlighted_img = vlm_utils.replace_patch_with_noise(pixel_values, margin_pos_list, noise_type='black', patch_size=14, mean=0.0, std=1.0)
-                # margin_img = vlm_utils.replace_patch_with_noise(pixel_values, highlighted_pos_list, noise_type='black', patch_size=14, mean=0.0, std=1.0)
+                    threshold = summed_map.mean()
+                    binary_mask = summed_map > threshold
+                    binary_map = binary_mask.int()
 
-                # greedy_highlighted_img.append(highlighted_img)
-                greedy_logits.append(next_token_logits)
-                probs = F.softmax(next_token_logits, dim=-1)  # shape: (B, V)
-                log_probs = F.log_softmax(next_token_logits, dim=-1)  # shape: (B, V)
-                entropy = -(probs * log_probs).sum(dim=-1) # shape: (B,)
-                greedy_entropys.append(entropy.item())
-                greedy_token_names.append(next_token_name)
-        
+                    margin_indices = torch.nonzero(~binary_mask, as_tuple=False)
+                    margin_values = summed_map[margin_indices[:, 0], margin_indices[:, 1]]
+                    margin_pos_list = [(int(y.item()), int(x.item()), float(v.item())) for (y, x), v in zip(margin_indices, margin_values)]
+                    
+                    highlighted_indices = torch.nonzero(binary_mask, as_tuple=False)
+                    highlighted_values = summed_map[highlighted_indices[:, 0], highlighted_indices[:, 1]]
+                    highlighted_pos_list = [(int(y.item()), int(x.item()), float(v.item())) for (y, x), v in zip(highlighted_indices, highlighted_values)]
+                    
+                    highlighted_img = vlm_utils.replace_patch_with_noise(pixel_values, margin_pos_list, noise_type='black', patch_size=14, mean=0.0, std=1.0)
+                    margin_img = vlm_utils.replace_patch_with_noise(pixel_values, highlighted_pos_list, noise_type='black', patch_size=14, mean=0.0, std=1.0)
+                    vlm_utils.input_pixels_to_img(highlighted_img, 'highlighted_img', image_id, 'visualize/')
+                    vlm_utils.input_pixels_to_img(margin_img, 'margin_img', image_id, 'visualize/')
+
+                    greedy_highlighted_img.append(highlighted_img)
+                    greedy_logits.append(next_token_logits)
+                    probs = F.softmax(next_token_logits, dim=-1)  # shape: (B, V)
+                    log_probs = F.log_softmax(next_token_logits, dim=-1)  # shape: (B, V)
+                    entropy = -(probs * log_probs).sum(dim=-1) # shape: (B,)
+                    greedy_entropys.append(entropy.item())
+                    greedy_token_names.append(next_token_name)
+            
                 if next_token_id.item() == processor.tokenizer.eos_token_id:
                     break
                 generated = torch.cat((generated, next_token_id), dim=1)
                 attention_mask = torch.cat((attention_mask, torch.ones_like(next_token_id)), dim=1)
                 past_key_values = outputs.past_key_values
+
         greedy_output = processor.tokenizer.batch_decode(generated[:, input_ids.shape[1]:], skip_special_tokens=True)[0]
-        #디코더의 최종출력캡션 = out
-        out = [greedy_output]
+        
+        GREEN = "\033[92m"  
+        RED = "\033[91m"    
+        RESET = "\033[0m"   
+
+        text = greedy_output
+        colored_text = text.replace("Yes", f"{GREEN}Yes{RESET}")
+        colored_text = colored_text.replace("No", f"{RED}No{RESET}")
+
+        print('-'*30)
+        print(f'greedy: {colored_text}')
+
+        #####################################
+        # 3. contrastive decoding (no KV cache)
+        # fix: 매 스텝마다 pixel_values를 다시 넣는다.
+
+        model.eval()
+
+        alpha = args.alpha   # margin 억제 강도
+        beta  = args.beta   # highlighted 강화 강도
+
+        # 디바이스/dtype 정렬 (안전장치)
+        pixel_values    = pixel_values.to(model.device)
+        highlighted_img = highlighted_img.to(model.device).to(pixel_values.dtype)
+        margin_img      = margin_img.to(model.device).to(pixel_values.dtype)
+
+        generated_cd = input_ids.clone()
+
+        with torch.inference_mode():
+            for token_step in range(max_new_tokens):
+         
+                attention_mask_cd = torch.ones_like(generated_cd)
+
+                pix_base   = pixel_values
+                pix_high   = highlighted_img
+                pix_margin = margin_img
+
+                # base
+                logits_base = model(
+                    input_ids=generated_cd,
+                    attention_mask=attention_mask_cd,
+                    pixel_values=pix_base,
+                    use_cache=False,
+                    return_dict=True,
+                ).logits[:, -1, :]
+
+                # highlighted
+                logits_high = model(
+                    input_ids=generated_cd,
+                    attention_mask=attention_mask_cd,
+                    pixel_values=pix_high,
+                    use_cache=False,
+                    return_dict=True,
+                ).logits[:, -1, :]
+
+                # margin
+                logits_margin = model(
+                    input_ids=generated_cd,
+                    attention_mask=attention_mask_cd,
+                    pixel_values=pix_margin,
+                    use_cache=False,
+                    return_dict=True,
+                ).logits[:, -1, :]
+
+                # 결합 로짓
+                combined_logits = logits_base + beta * logits_high - alpha * logits_margin
+                next_token_id_cd = torch.argmax(combined_logits, dim=-1, keepdim=True)
+
+                if next_token_id_cd.item() == processor.tokenizer.eos_token_id:
+                    break
+
+                generated_cd = torch.cat((generated_cd, next_token_id_cd), dim=1)
+
+        contrastive_output = processor.tokenizer.batch_decode(
+            generated_cd[:, input_ids.shape[1]:], skip_special_tokens=True
+        )[0]
+
+        # 출력 색상 처리
+        text = contrastive_output
+        colored_text = text.replace("Yes", f"{GREEN}Yes{RESET}").replace("No", f"{RED}No{RESET}")
+        print(f'cd: {colored_text}')
+        # 라벨 출력
+        if label.item() == 1:
+            label = 'yes'
+            print(f"label: {GREEN}Yes{RESET}")
+        else:
+            label = 'no'
+            print(f"label: {RED}No{RESET}")
+        
+        out = "yes" if "yes" in contrastive_output.lower() else "no" if "no" in contrastive_output.lower() else None
+        if out:
+            if out == label:
+                if out != greedy_output.lower():
+                    print("\033[93mcorrected\033[0m")
+                else:
+                    pass
+            else:
+                if out != greedy_output.lower():
+                    print("\033[94mcollapsed\033[0m")  # blue collapsed
+        print('-' * 30)
+
+
+
+        out = [contrastive_output]
         pred_list = recorder(out, pred_list)
         for line in out:
             print(line)
@@ -514,7 +634,7 @@ def main():
     }
     metrics_path = os.path.join(
         base_dir,
-        f"{pope_type}_{formatted_time}_{model_name}_{decoding_strategy}_seed_{seed}_max_tokens_{max_new_tokens}_samples_{num_images}_results.json",
+        f"{pope_type}_{formatted_time}_{model_name}_{decoding_strategy}_seed_{seed}_alpha_{alpha}_beta_{beta}_max_tokens_{max_new_tokens}_samples_{num_images}_results.json",
     )
     with open(metrics_path, "w") as f:
         json.dump(result, f)
