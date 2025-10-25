@@ -382,6 +382,8 @@ def main():
 ################################################################
 ################################################################
     print(5)
+    corrected_accumulated = 0
+    collapsed_accumulated = 0
     idx = 0
     for batch_id, data in tqdm(enumerate(pope_loader), total=len(pope_loader)):
         idx += 1
@@ -589,15 +591,16 @@ def main():
             if out == label:
                 if out != greedy_output.lower():
                     print("\033[93mcorrected\033[0m")
+                    corrected_accumulated += 1
                 else:
                     pass
             else:
                 if out != greedy_output.lower():
                     print("\033[94mcollapsed\033[0m")  # blue collapsed
+                    collapsed_accumulated  += 1
         print('-' * 30)
-
-
-
+        print(f'corrected: {corrected_accumulated} | collapsed: {collapsed_accumulated}')
+      
         out = [contrastive_output]
         pred_list = recorder(out, pred_list)
         for line in out:
