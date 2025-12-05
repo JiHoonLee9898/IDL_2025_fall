@@ -421,7 +421,7 @@ def main():
         input_ids = inputs["input_ids"].to(model.device)
         attention_mask = inputs["attention_mask"].to(model.device)
         pixel_values = inputs["pixel_values"].to(model.device)
-        vlm_utils.input_pixels_to_img(pixel_values, 'original', image_id, 'visualize/')
+        # vlm_utils.input_pixels_to_img(pixel_values, 'original', image_id, 'visualize/')
         generated = input_ids
         max_new_tokens = max_new_tokens
 
@@ -479,8 +479,8 @@ def main():
                     
                     highlighted_img = vlm_utils.replace_patch_with_noise(pixel_values, margin_pos_list, noise_type='black', patch_size=14, mean=0.0, std=1.0)
                     margin_img = vlm_utils.replace_patch_with_noise(pixel_values, highlighted_pos_list, noise_type='black', patch_size=14, mean=0.0, std=1.0)
-                    vlm_utils.input_pixels_to_img(highlighted_img, 'highlighted_img', image_id, 'visualize/')
-                    vlm_utils.input_pixels_to_img(margin_img, 'margin_img', image_id, 'visualize/')
+                    # vlm_utils.input_pixels_to_img(highlighted_img, 'highlighted_img', image_id, 'visualize/')
+                    # vlm_utils.input_pixels_to_img(margin_img, 'margin_img', image_id, 'visualize/')
 
                     greedy_highlighted_img.append(highlighted_img)
                     greedy_logits.append(next_token_logits)
