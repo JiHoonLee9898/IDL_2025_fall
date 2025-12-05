@@ -5,7 +5,10 @@ conda activate IDL
 ```
 
 # Arguments
-Refer to the example in [`run_eval.sh`](/run_eval.sh). 
+
+Run [`run_eval.sh`](/run_eval.sh) for baseline.
+Run [`run_eval_3cd.sh`](/run_eval_3cd.sh) for our method.
+
 `--model_path` is the absolute path of cloned https://huggingface.co/llava-hf/llava-1.5-7b-hf.
 `--data_path` is `[COCO_DIR]`.
 
