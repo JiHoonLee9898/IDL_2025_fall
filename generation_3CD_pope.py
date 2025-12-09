@@ -257,10 +257,8 @@ def main():
     processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
     # --- hotfix: some HF LLaVA processors miss patch_size ---
     ps = None
-    # 1) 모델 설정에서 우선 시도
     if hasattr(model, "config") and hasattr(model.config, "vision_config"):
         ps = getattr(model.config.vision_config, "patch_size", None)
-    # 2) 못 찾으면 LLaVA-1.5 기본값 14
     if ps is None:
         ps = 14
     setattr(processor, "patch_size", ps)
@@ -390,7 +388,7 @@ def main():
         image = data["image"]
         qu = data["query"][0]
         label = data["label"]
-        image_path = data["image_path"] #여기서 리스트에 담긴 형태
+        image_path = data["image_path"]
         print(f'pope image_path : {image_path}')
         image_path = image_path[0]
         image = Image.open(image_path).convert("RGB")
@@ -423,7 +421,7 @@ def main():
         pixel_values = inputs["pixel_values"].to(model.device)
         # vlm_utils.input_pixels_to_img(pixel_values, 'original', image_id, 'visualize/')
         generated = input_ids
-        max_new_tokens = max_new_tokens
+        max_new_tokens = args.max_new_tokens
 
         # 전부 같은 길이!
         greedy_token_names = []
@@ -511,17 +509,19 @@ def main():
 
         #####################################
         # 3. contrastive decoding (no KV cache)
-        # fix: 매 스텝마다 pixel_values를 다시 넣는다.
 
         model.eval()
 
-        alpha = args.alpha   # margin 억제 강도
-        beta  = args.beta   # highlighted 강화 강도
+        alpha = args.alpha   # margin 
+        beta  = args.beta   # highlighted
 
-        # 디바이스/dtype 정렬 (안전장치)
         pixel_values    = pixel_values.to(model.device)
         highlighted_img = highlighted_img.to(model.device).to(pixel_values.dtype)
         margin_img      = margin_img.to(model.device).to(pixel_values.dtype)
+
+        pix_base   = pixel_values
+        pix_high   = highlighted_img
+        pix_margin = margin_img
 
         generated_cd = input_ids.clone()
 
@@ -530,9 +530,9 @@ def main():
          
                 attention_mask_cd = torch.ones_like(generated_cd)
 
-                pix_base   = pixel_values
-                pix_high   = highlighted_img
-                pix_margin = margin_img
+                # pix_base   = pixel_values
+                # pix_high   = highlighted_img
+                # pix_margin = margin_img
 
                 # base
                 logits_base = model(
