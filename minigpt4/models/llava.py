@@ -1,5 +1,6 @@
 import logging
 import random
+import contextlib
 
 import torch
 from torch.cuda.amp import autocast as autocast
@@ -60,6 +61,7 @@ class LLaVa(BaseModel):
 
         kwargs = {"device_map": device_map}
         self.system_message = system_message
+        self.device = torch.device(device)
 
         if load_8bit:
             kwargs['load_in_8bit'] = True
@@ -107,6 +109,23 @@ class LLaVa(BaseModel):
         else:
             return contextlib.nullcontext()
 
+    def tokenizer_image_token(self, prompt, image_token_index=IMAGE_TOKEN_INDEX, return_tensors=None):
+        """Tokenize prompt and replace <image> tokens with image_token_index"""
+        prompt_chunks = [self.llama_tokenizer(chunk, return_tensors=return_tensors, add_special_tokens=False).input_ids for chunk in prompt]
+
+        def insert_separator(X, sep):
+            return [ele for sublist in zip(X, [sep]*len(X)) for ele in sublist][:-1]
+
+        input_ids = []
+        for chunk_ids in prompt_chunks:
+            if return_tensors is not None:
+                chunk_ids = chunk_ids[0]
+            input_ids.append(chunk_ids)
+
+        if return_tensors == 'pt':
+            return torch.stack(input_ids)
+        return input_ids
+
     def forward(self, samples):
         image = samples["image"]
 
@@ -122,12 +141,17 @@ class LLaVa(BaseModel):
         instruction = [p.replace('<ImageHere>', '<image>') for p in instruction]
         instruction = [self.system_message + p for p in instruction]
 
-        input_ids = self.tokenizer_image_token(instruction, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).cuda()
+        input_ids = self.tokenizer_image_token(instruction, IMAGE_TOKEN_INDEX, return_tensors='pt').cuda()
 
-        ###TODO: targets, attention_mask
+        # Create attention mask (all ones, assuming no padding)
+        attention_mask = torch.ones_like(input_ids)
+
+        # For training, targets should be provided in samples, otherwise use input_ids
+        targets = samples.get("labels", input_ids.clone())
+
         with self.maybe_autocast():
-            outputs = self.llm_model(
-                inputs_ids=inputs_ids,
+            outputs = self.llama_model(
+                input_ids=input_ids,
                 attention_mask=attention_mask,
                 return_dict=True,
                 labels=targets,
